@@ -134,6 +134,39 @@ def test_clip_polygon(mga_grid):
     assert np.isnan(c2.values[0, 0]) and np.isfinite(c2.values[30, 20])
 
 
+def test_profile_on_plane_is_exact(mga_grid):
+    # Bilinear sampling of a plane reproduces the plane. Fails if the
+    # row/column mapping is off by half a cell or the y direction is flipped.
+    a, b = 0.01, -0.02
+    xx, yy = np.meshgrid(mga_grid.x, mga_grid.y)
+    plane = mga_grid.with_values(a * xx + b * yy)
+    w, s, e, n = plane.bounds
+    p = plane.profile((w + 300, s + 400), (e - 300, n - 400))
+    assert np.allclose(p.values, a * p.x + b * p.y)
+    assert p.distance[0] == 0 and p.length == pytest.approx(np.hypot(e - w - 600, n - s - 800))
+    assert np.all(np.diff(p.distance) > 0)
+    assert len(p) == int(np.ceil(np.hypot((e - w - 600) / plane.dx, (n - s - 800) / plane.dy))) + 1
+
+
+def test_profile_nan_and_other_crs(mga_grid, geo_grid):
+    w, s, e, n = mga_grid.bounds
+    d = mga_grid.dx
+    # the NaN block is rows 5..9, cols 5..11; a line through it gives NaN there and finite elsewhere
+    p = mga_grid.profile((w + 2 * d, n - 7.5 * d), (w + 20 * d, n - 7.5 * d), n=37)
+    assert np.isnan(p.values[(p.x > w + 5 * d) & (p.x < w + 11 * d)]).all()
+    assert np.isfinite(p.values[p.x > w + 13 * d]).all()
+    # geographic start/end on a projected grid
+    tr = pyproj.Transformer.from_crs(28354, 4283, always_xy=True)
+    lon0, lat0 = tr.transform(w + 1000, s + 1000)
+    lon1, lat1 = tr.transform(e - 1000, n - 1000)
+    q = mga_grid.profile((lon0, lat0), (lon1, lat1), epsg=4283)
+    assert q.x[0] == pytest.approx(w + 1000, abs=0.01) and q.y[-1] == pytest.approx(n - 1000, abs=0.01)
+    # geographic grid: geodesic distance, values = lon*1000
+    g = geo_grid.profile((140.01, -31.2), (140.29, -31.05))
+    assert np.allclose(g.values, g.x * 1000.0)
+    assert 25_000 < g.length < 35_000  # ~0.28 deg lon and 0.15 deg lat at 31 S
+
+
 def test_mga_zone(geo_grid, mga_grid):
     assert geo_grid.mga_epsg() == 28354  # 140.15E is in zone 54 (138 to 144E)
     assert geo_grid.mga_epsg("GDA2020") == 7854

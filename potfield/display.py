@@ -19,7 +19,7 @@ from matplotlib.colors import LightSource
 from matplotlib.ticker import FuncFormatter
 from scipy.ndimage import gaussian_filter
 
-from .grid import Grid
+from .grid import Grid, Profile
 
 
 def clip_limits(values: np.ndarray, method: str = "std", n: float = 2.5) -> tuple[float, float]:
@@ -127,6 +127,58 @@ def compare(grids: list[Grid], ncols: int = 2, figsize_per: tuple[float, float] 
         ax.axis("off")
     fig.tight_layout()
     return fig, axes
+
+
+def plot_profiles(profiles: list[Profile], sharey: bool = False, figsize_per: float = 2.2, **plot_kw):
+    """Stacked line plots of several profiles against distance in km.
+
+    One axis per profile so different units do not share a scale. Returns
+    (fig, axes).
+    """
+    n = len(profiles)
+    fig, axes = plt.subplots(n, 1, sharex=True, sharey=sharey, figsize=(9, figsize_per * n + 0.8), squeeze=False)
+    for ax, p in zip(axes[:, 0], profiles):
+        ax.plot(p.distance / 1e3, p.values, **plot_kw)
+        ax.set_ylabel(p.units or "")
+        ax.set_title(p.name, loc="left", fontsize=9)
+        ax.grid(alpha=0.3)
+    axes[-1, 0].set_xlabel("distance (km)")
+    fig.tight_layout()
+    return fig, axes
+
+
+def plot_line(ax, profile: Profile, color: str = "k", **kw):
+    """Draw a profile's track on a map axis with start and end marked."""
+    ax.plot(profile.x, profile.y, color=color, lw=1.2, **kw)
+    ax.plot(profile.x[0], profile.y[0], "o", color=color, ms=4)
+    ax.plot(profile.x[-1], profile.y[-1], "s", color=color, ms=4)
+    return ax
+
+
+def plot_spectrum_2d(grid: Grid, ax=None, kmax: float | None = None, clip: tuple[str, float] = ("pct", 1), pad: int | None = None, cmap: str = "magma"):
+    """Image of the 2D log power spectrum in rad/km, north up.
+
+    kmax (rad/m) limits the axes; default is the Nyquist of the grid. A
+    linear feature striking at azimuth a shows up as a spoke at azimuth
+    a + 90 in this picture.
+    """
+    from .spectrum import power_spectrum_2d
+
+    s = power_spectrum_2d(grid, pad=pad)
+    if ax is None:
+        _, ax = plt.subplots(figsize=(6.5, 6))
+    vmin, vmax = clip_limits(s["log_power"], clip[0], clip[1])
+    im = ax.imshow(s["log_power"], extent=s["extent"], origin="upper", cmap=cmap, vmin=vmin, vmax=vmax)
+    lim = (kmax if kmax is not None else np.pi / max(grid.spacing())) * 1e3
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.axhline(0, color="w", lw=0.3, alpha=0.5)
+    ax.axvline(0, color="w", lw=0.3, alpha=0.5)
+    ax.set_xlabel("kx east (rad/km)")
+    ax.set_ylabel("ky north (rad/km)")
+    ax.set_title(f"{grid.name} log power")
+    plt.colorbar(im, ax=ax, shrink=0.8, label="ln P")
+    return ax
 
 
 # overlays -----------------------------------------------------------------

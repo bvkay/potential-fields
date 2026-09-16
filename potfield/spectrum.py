@@ -49,6 +49,28 @@ def radial_power_spectrum(grid: Grid, nbins: int | None = None, pad: int | None 
     }
 
 
+def power_spectrum_2d(grid: Grid, pad: int | None = None) -> dict[str, np.ndarray]:
+    """Two-dimensional log power spectrum, zero wavenumber at the centre.
+
+    Returns log_power (2D, north up), kx and ky (1D, rad/m, ascending) and
+    extent for imshow in rad/km. Linear features in the grid appear as a
+    spoke through the centre perpendicular to their strike: north-south
+    stripes put energy along the kx axis.
+    """
+    dx, dy = _spacing(grid)
+    P, _ = fft.power_spectrum(grid.values, dx, dy, pad=pad)
+    ny, nx = P.shape
+    kx = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(nx, d=dx))
+    ky = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(ny, d=dy))
+    logP = np.log(np.fft.fftshift(P) + np.finfo(float).tiny)
+    # rows of the shifted array run from most negative fy to most positive.
+    # Our ky is positive north, i.e. the negative of fy, so flip to put north up.
+    logP = logP[::-1, :]
+    dkx, dky = kx[1] - kx[0], ky[1] - ky[0]
+    extent = ((kx[0] - dkx / 2) * 1e3, (kx[-1] + dkx / 2) * 1e3, (ky[0] - dky / 2) * 1e3, (ky[-1] + dky / 2) * 1e3)
+    return {"log_power": logP, "kx": kx, "ky": ky, "extent": extent}
+
+
 def depth_from_slope(k: np.ndarray, log_power: np.ndarray, kmin: float, kmax: float) -> dict[str, float]:
     """Straight-line fit to ln P over kmin <= k <= kmax (rad/m).
 

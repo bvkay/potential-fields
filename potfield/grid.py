@@ -26,8 +26,32 @@ from rasterio.warp import calculate_default_transform, transform as warp_transfo
 from rasterio.warp import reproject as _warp_reproject
 from rasterio.warp import transform_bounds
 from rasterio.windows import Window, from_bounds
+from scipy.ndimage import map_coordinates
 
 M_PER_DEG = 111_320.0  # metres per degree of latitude, spherical approximation
+
+
+@dataclass
+class Profile:
+    """Values sampled along a straight line across a Grid.
+
+    distance is metres from the start point; x, y are the sample positions
+    in the grid CRS. Null cells give NaN.
+    """
+
+    distance: np.ndarray
+    x: np.ndarray
+    y: np.ndarray
+    values: np.ndarray
+    name: str = ""
+    units: str = ""
+
+    def __len__(self) -> int:
+        return len(self.distance)
+
+    @property
+    def length(self) -> float:
+        return float(self.distance[-1])
 
 
 @dataclass
@@ -232,6 +256,45 @@ class Grid:
             resampling=resampling,
         )
         return Grid(out, like.transform, like.crs, self.name, self.units)
+
+    def profile(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        n: int | None = None,
+        epsg: int | None = None,
+    ) -> Profile:
+        """Sample along the line from start to end by bilinear interpolation.
+
+        start and end are (x, y) in the grid CRS, or in `epsg` if given.
+        n samples default to one per cell along the line. Samples that touch
+        a null cell are NaN. Distance is in metres, geodesic for geographic
+        grids.
+        """
+        if epsg is not None and CRS.from_epsg(epsg) != self.crs:
+            xs_, ys_ = warp_transform(CRS.from_epsg(epsg), self.crs, [start[0], end[0]], [start[1], end[1]])
+            start, end = (xs_[0], ys_[0]), (xs_[1], ys_[1])
+        (x0, y0), (x1, y1) = start, end
+        if n is None:
+            n = int(math.ceil(math.hypot((x1 - x0) / self.dx, (y1 - y0) / self.dy))) + 1
+        n = max(int(n), 2)
+        xs = np.linspace(x0, x1, n)
+        ys = np.linspace(y0, y1, n)
+        cols = (xs - self.transform.c) / self.dx - 0.5
+        rows = (self.transform.f - ys) / self.dy - 0.5
+        nan = np.isnan(self.values)
+        filled = np.where(nan, 0.0, self.values)
+        vals = map_coordinates(filled, [rows, cols], order=1, mode="constant", cval=np.nan)
+        touched = map_coordinates(nan.astype(float), [rows, cols], order=1, mode="constant", cval=1.0)
+        vals[touched > 0] = np.nan
+        if self.is_projected:
+            dist = np.hypot(xs - x0, ys - y0)
+        else:
+            import pyproj
+
+            _, _, seg = pyproj.Geod(ellps="GRS80").inv(xs[:-1], ys[:-1], xs[1:], ys[1:])
+            dist = np.concatenate([[0.0], np.cumsum(seg)])
+        return Profile(dist, xs, ys, vals, self.name, self.units)
 
     # inspection ---------------------------------------------------------
 

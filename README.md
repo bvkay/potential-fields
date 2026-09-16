@@ -43,13 +43,13 @@ and uses a cos(lat) approximation, so reproject first.
 
 | module | contents |
 |---|---|
-| `grid` | `Grid` container, `read_grid`, subset by bounds or polygon, `reproject`, `regrid` |
+| `grid` | `Grid` container, `read_grid`, subset by bounds or polygon, `reproject`, `regrid`, `profile` along a line |
 | `export` | `write_grid` to .tif .grd .asc .ers .nc .xyz, optional target EPSG |
 | `fft` | wavenumber grids, edge plane removal, padding and taper, `apply` |
 | `filters` | continuation, derivatives, THDR, analytic signal, tilt, Butterworth and Gaussian band filters, directional cosine, trend removal |
 | `transforms` | reduction to pole, pseudogravity, pseudomagnetic, moving-window Poisson analysis |
-| `spectrum` | radially averaged power spectrum, depth from slope |
-| `display` | clipped colour scales, sunshade, AGC, polyline overlays |
+| `spectrum` | radially averaged and 2D power spectra, depth from slope |
+| `display` | clipped colour scales, sunshade, AGC, profile plots, 2D spectrum image, polyline overlays |
 | `synthetic` | analytic point mass and dipole fields used by the tests |
 
 Every filter takes and returns a `Grid`. Filter responses are documented at

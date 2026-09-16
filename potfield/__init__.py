@@ -12,10 +12,11 @@ Conventions used throughout:
 
 from . import filters, spectrum, synthetic, transforms
 from .export import write_grid, write_netcdf, write_xyz
-from .grid import Grid, read_ers, read_grid
+from .grid import Grid, Profile, read_ers, read_grid
 
 __all__ = [
     "Grid",
+    "Profile",
     "read_grid",
     "read_ers",
     "write_grid",

@@ -40,6 +40,26 @@ def test_depth_scales_with_source_depth():
     assert d[1] / d[0] == pytest.approx(3.0, rel=0.05)
 
 
+def test_power_spectrum_2d_stripe_location():
+    # North-south stripes of wavelength 8 cells vary only in x, so their
+    # energy must sit on the ky = 0 row at |kx| = 2 pi / (8 dx). Fails if the
+    # axes are swapped, the shift is wrong or the wavenumber scale is off.
+    g, _ = point_mass_grid(128, 128, DX, Z0)
+    xx, _ = np.meshgrid(g.x, g.y)
+    stripes = g.with_values(np.sin(2 * np.pi * xx / (8 * DX)))
+    s = spectrum.power_spectrum_2d(stripes)
+    j, i = np.unravel_index(np.argmax(s["log_power"]), s["log_power"].shape)
+    # log_power rows run north (positive ky) to south; row j maps to ky[::-1][j]
+    assert abs(s["ky"][::-1][j]) < (s["ky"][1] - s["ky"][0])
+    assert abs(abs(s["kx"][i]) - 2 * np.pi / (8 * DX)) < 1.5 * (s["kx"][1] - s["kx"][0])
+    # east-west stripes (varying in y) land on the kx = 0 column
+    _, yy = np.meshgrid(g.x, g.y)
+    s2 = spectrum.power_spectrum_2d(g.with_values(np.sin(2 * np.pi * yy / (8 * DX))))
+    j2, i2 = np.unravel_index(np.argmax(s2["log_power"]), s2["log_power"].shape)
+    assert abs(s2["kx"][i2]) < (s2["kx"][1] - s2["kx"][0])
+    assert abs(abs(s2["ky"][::-1][j2]) - 2 * np.pi / (8 * DX)) < 1.5 * (s2["ky"][1] - s2["ky"][0])
+
+
 def test_depth_from_slope_requires_points():
     with pytest.raises(ValueError):
         spectrum.depth_from_slope(np.array([1.0, 2.0]), np.array([0.0, -1.0]), 0.0, 10.0)
