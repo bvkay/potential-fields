@@ -97,28 +97,51 @@ def test_pseudogravity_pseudomagnetic_roundtrip():
     assert rms_near(back.values, tmi.values) < 0.02
 
 
-def test_poisson_analysis_recovers_ratio_and_correlation():
-    # Common source: point mass and the equivalent pole dipole. Expected
-    # slope of RTP (nT) against dg/dz (mGal/m) is Cm M/(G rho) in those units.
-    # Fails if the slope is off by more than 10% or r < 0.95 over the source,
-    # or if a gravity-only source 4 km away still shows r > 0.7.
+@pytest.mark.parametrize("mode", ["derivative", "pseudogravity"])
+def test_poisson_analysis_recovers_ratio_and_correlation(mode):
+    # Common source: point mass and the equivalent pole dipole. Derivative
+    # mode: slope of RTP (nT) against dg/dz (mGal/m) is Cm M/(G rho).
+    # Pseudogravity mode: slope of pseudogravity (rho0 = 1000, M0 = 1)
+    # against gravity is (rho0/M0)(M/rho). Both must return M/rho.
+    # Fails if the slope is off by more than 10% or r < 0.95 over the source.
     rho, M = 500.0, 1.0
     mass = MOMENT * rho / M
     grav, _ = point_mass_grid(N, N, DX, Z0, gm=G * mass * MGAL)
     grav2, _ = point_mass_grid(N, N, DX, Z0, gm=G * mass * MGAL, offset=(4000.0, 0.0))
     grav = grav.with_values(grav.values + grav2.values)
     pole = dipole_grid(N, N, DX, Z0, MOMENT, inc=90.0, dec=0.0)
-    out = transforms.poisson_analysis(grav, pole, window=15, magnetics_is_rtp=True)
+    out = transforms.poisson_analysis(grav, pole, window=15, magnetics_is_rtp=True, mode=mode)
 
-    expected_slope = CM * M / (G * rho) * 1e-4**-1  # T per (m/s^2 / m) -> nT per (mGal/m)
+    if mode == "derivative":
+        expected_slope = CM * M / (G * rho) * 1e-4**-1  # T per (m/s^2 / m) -> nT per (mGal/m)
+    else:
+        expected_slope = transforms.PG_DENSITY / transforms.PG_MAGNETISATION * (M / rho)
     near = near_mask(grav.shape, Z0 / 2)
     assert np.nanmedian(out["slope"].values[near]) == pytest.approx(expected_slope, rel=0.10)
     assert np.nanmin(out["correlation"].values[near]) > 0.95
     assert np.nanmedian(out["m_over_rho"].values[near]) == pytest.approx(M / rho, rel=0.10)
-    # gravity-only source: centre column shifted 40 cells east
-    far = near_mask(grav.shape, Z0 / 3)
-    far = np.roll(far, 40, axis=1)
-    assert np.nanmedian(np.abs(out["correlation"].values[far])) < 0.7
+    assert np.nanmedian(out["signal"].values[near]) > 0.5
+    assert out["x"].shape == grav.shape and out["y"].shape == grav.shape
+    if mode == "derivative":
+        # gravity-only source 4 km east: dg/dz there has no magnetic partner
+        far = np.roll(near_mask(grav.shape, Z0 / 3), 40, axis=1)
+        assert np.nanmedian(np.abs(out["correlation"].values[far])) < 0.7
+
+
+def test_poisson_analysis_bandpass_and_window_m():
+    rho, M = 500.0, 1.0
+    mass = MOMENT * rho / M
+    grav, _ = point_mass_grid(N, N, DX, Z0, gm=G * mass * MGAL)
+    pole = dipole_grid(N, N, DX, Z0, MOMENT, inc=90.0, dec=0.0)
+    out = transforms.poisson_analysis(
+        grav, pole, magnetics_is_rtp=True, window_m=1500.0, lowpass_wavelength=400.0, regional_wavelength=20000.0
+    )
+    near = near_mask(grav.shape, Z0 / 2)
+    # identical linear filters on both sides leave the ratio unchanged
+    assert np.nanmedian(out["m_over_rho"].values[near]) == pytest.approx(M / rho, rel=0.10)
+    assert np.nanmin(out["correlation"].values[near]) > 0.95
+    with pytest.raises(ValueError):
+        transforms.poisson_analysis(grav, pole, magnetics_is_rtp=True, mode="nope")
 
 
 def test_poisson_analysis_regrids_and_reduces():
@@ -128,7 +151,7 @@ def test_poisson_analysis_regrids_and_reduces():
     tmi = dipole_grid(N, N, DX, Z0, MOMENT, inc=-60.0, dec=5.0)
     coarse = tmi.reproject(28354, res=200.0)  # different geometry, same CRS
     assert coarse.shape != grav.shape
-    out = transforms.poisson_analysis(grav, coarse, inclination=-60.0, declination=5.0, window=15)
+    out = transforms.poisson_analysis(grav, coarse, inclination=-60.0, declination=5.0, window=15, mode="derivative")
     assert out["correlation"].shape == grav.shape
     near = near_mask(grav.shape, Z0 / 2)
     assert np.nanmedian(out["correlation"].values[near]) > 0.9

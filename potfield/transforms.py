@@ -32,7 +32,7 @@ import numpy as np
 from scipy.ndimage import uniform_filter
 
 from . import fft
-from .filters import _spacing, vertical_derivative
+from .filters import _spacing, butterworth_highpass, butterworth_lowpass, vertical_derivative
 from .grid import Grid
 from .synthetic import CM, G, MGAL, NT
 
@@ -177,37 +177,85 @@ def windowed_regression(x: np.ndarray, y: np.ndarray, size: int, min_fraction: f
     return {"slope": slope, "intercept": intercept, "correlation": r}
 
 
+PG_DENSITY = 1000.0  # nominal rho0 (kg/m^3) used for pseudogravity inside poisson_analysis
+PG_MAGNETISATION = 1.0  # nominal M0 (A/m)
+
+
 def poisson_analysis(
     gravity: Grid,
     magnetics: Grid,
     inclination: float | None = None,
     declination: float | None = None,
-    window: float = 15,
+    window: int = 21,
+    window_m: float | None = None,
     magnetics_is_rtp: bool = False,
+    mode: str = "pseudogravity",
+    lowpass_wavelength: float | None = None,
+    regional_wavelength: float | None = None,
     pad: int | None = None,
 ) -> dict[str, Grid]:
     """Moving-window Poisson analysis (Chandler and Malek 1991).
 
     gravity in mGal, magnetics in nT. magnetics is reduced to the pole with
-    the given field direction unless magnetics_is_rtp. Both grids are put on
-    the gravity geometry. window is the regression window in cells (odd).
+    the given field direction unless magnetics_is_rtp. The regression pair
+    is formed, put on the gravity geometry, band passed identically, and
+    regressed in a sliding window.
 
-    Returns Grids: slope (nT per mGal/m), intercept (nT), correlation, and
-    m_over_rho, the magnetisation to density ratio (A/m per kg/m^3) implied
-    by the slope: M/rho = slope * 1e-4 * G / Cm.
+    mode "pseudogravity" (default): y = pseudogravity of the RTP field
+        (nominal rho0 = 1000 kg/m^3, M0 = 1 A/m), x = gravity. Both are
+        smooth, so the fit is controlled by the wavelengths the gravity
+        grid resolves. slope = (rho0/M0) * (M/rho).
+    mode "derivative": y = RTP field, x = dg/dz (the form in Chandler and
+        Malek). Sharper, but dg/dz amplifies gridding noise in gravity
+        interpolated from sparse stations. slope = Cm M / (G rho) in
+        nT per mGal/m.
+
+    lowpass_wavelength (m): Butterworth low pass on both inputs; set to about
+        twice the gravity station spacing.
+    regional_wavelength (m): Butterworth high pass on both inputs. Without it
+        two smooth trends inside a window correlate whatever their sources.
+    window: regression window in cells (odd); window_m in metres overrides it.
+
+    Returns Grids: slope, intercept, correlation (Pearson r), m_over_rho
+    (A/m per kg/m^3), signal (window std of x over its global std, a
+    measure of whether the window holds an anomaly at all), and the two
+    regressed inputs x and y.
     """
+    if mode not in ("pseudogravity", "derivative"):
+        raise ValueError("mode must be 'pseudogravity' or 'derivative'")
     if not magnetics_is_rtp:
         if inclination is None or declination is None:
             raise ValueError("inclination and declination are needed unless magnetics_is_rtp")
         magnetics = reduce_to_pole(magnetics, inclination, declination, pad=pad)
-    mag = magnetics.regrid(gravity)
-    gz = vertical_derivative(gravity, 1, pad=pad)
-    size = int(window) | 1  # force odd
-    reg = windowed_regression(gz.values, mag.values, size)
-    ratio = reg["slope"] * (NT / MGAL) ** -1 * G / CM  # nT/(mGal/m) -> (A/m)/(kg/m^3)
+    if mode == "pseudogravity":
+        y = pseudogravity(magnetics, 90.0, 0.0, PG_DENSITY, PG_MAGNETISATION, pad=pad).regrid(gravity)
+        x = gravity
+        slope_units, ratio_scale = "mGal/mGal", PG_MAGNETISATION / PG_DENSITY
+    else:
+        y = magnetics.regrid(gravity)
+        x = vertical_derivative(gravity, 1, pad=pad)
+        slope_units, ratio_scale = "nT/(mGal/m)", (MGAL / NT) * G / CM
+    if lowpass_wavelength:
+        x = butterworth_lowpass(x, lowpass_wavelength, pad=pad)
+        y = butterworth_lowpass(y, lowpass_wavelength, pad=pad)
+    if regional_wavelength:
+        x = butterworth_highpass(x, regional_wavelength, pad=pad)
+        y = butterworth_highpass(y, regional_wavelength, pad=pad)
+
+    size = int(round(window_m / gravity.dx)) if window_m is not None else int(window)
+    size = max(3, size) | 1  # odd, at least 3
+    reg = windowed_regression(x.values, y.values, size)
+    valid = np.isfinite(x.values)
+    mx, _ = _window_mean(x.values, valid, size)
+    mxx, _ = _window_mean(x.values**2, valid, size)
+    signal = np.sqrt(np.maximum(mxx - mx**2, 0.0)) / np.nanstd(x.values)
+    signal[~np.isfinite(reg["correlation"])] = np.nan
     return {
-        "slope": gravity.with_values(reg["slope"], name="poisson_slope", units="nT/(mGal/m)"),
-        "intercept": gravity.with_values(reg["intercept"], name="poisson_intercept", units="nT"),
+        "slope": gravity.with_values(reg["slope"], name="poisson_slope", units=slope_units),
+        "intercept": gravity.with_values(reg["intercept"], name="poisson_intercept", units=y.units),
         "correlation": gravity.with_values(reg["correlation"], name="poisson_correlation", units=""),
-        "m_over_rho": gravity.with_values(ratio, name="poisson_m_over_rho", units="(A/m)/(kg/m^3)"),
+        "m_over_rho": gravity.with_values(reg["slope"] * ratio_scale, name="poisson_m_over_rho", units="(A/m)/(kg/m^3)"),
+        "signal": gravity.with_values(signal, name="poisson_signal", units=""),
+        "x": x.with_values(x.values, name=f"{x.name} (regression x)"),
+        "y": y.with_values(y.values, name=f"{y.name} (regression y)"),
     }
