@@ -49,7 +49,7 @@ and uses a cos(lat) approximation, so reproject first.
 | `filters` | continuation, derivatives, THDR, analytic signal, tilt, Butterworth and Gaussian band filters, directional cosine, trend removal |
 | `transforms` | reduction to pole, pseudogravity, pseudomagnetic, moving-window Poisson analysis |
 | `spectrum` | radially averaged and 2D power spectra, depth from slope |
-| `model2d` | 2D polygon forward modelling of gravity and TMI along a profile, least-squares fitting, model plots |
+| `model2d` | 2D polygon forward modelling of gravity and TMI along a profile, layered sections, least-squares fitting, model plots |
 | `display` | clipped colour scales, sunshade, AGC, profile plots, 2D spectrum image, polyline overlays |
 | `synthetic` | analytic point mass and dipole fields used by the tests |
 
@@ -90,6 +90,7 @@ Run in order. They use the grids in `data/`.
 | 06 | combining gravity and magnetics with Poisson analysis |
 | 07 | the workflow on a second area, Eyre Peninsula, from projected grids |
 | 08 | 2D profile modelling: forward models of polygonal bodies, manual fitting, least squares |
+| 09 | layered crustal-scale gravity model in the GM-SYS style: slab check, layer contributions, Moho fit, basin depth |
 
 ## Command line
 

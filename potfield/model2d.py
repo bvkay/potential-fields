@@ -9,10 +9,14 @@ Gravity (Talwani, Worzel and Landisman 1959, written here in complex form):
 with q = x + i z the position of a boundary point relative to the
 observation point, a and b the end points of an edge and d = b - a,
 
-    g_x + i g_z = -i G rho  sum_edges [ (d / conj d) conj(b ln b - a ln a) - d ]
+    g_x + i g_z = -i G rho  sum_edges [ d conj(L_a) + (d conj b / conj d) conj(ln(b/a)) - d ]
 
-for counterclockwise vertices. This is Green's theorem applied to the area
-integral of 1/conj(q); the -d terms sum to zero round a closed polygon.
+for counterclockwise vertices, where L_a is a branch of ln q that is
+continuous round the boundary (the principal log at the first vertex plus
+the accumulated angles ln(b/a) of the preceding edges). This is Green's
+theorem applied to the area integral of 1/conj(q) and holds for any
+observation point outside the body, beside it or below its top included.
+The -d terms sum to zero round a closed polygon.
 
 Magnetics: a uniformly magnetised body is equivalent to poles of surface
 density sigma = M . n on its boundary, n the outward normal. In two
@@ -72,14 +76,24 @@ class Body:
     mag_inc: float | None = None
     mag_dec: float | None = None
     name: str = ""
+    reference_density: float = 0.0  # density is a contrast against this; used for labels only
 
     def __post_init__(self):
         x = np.asarray(self.x, dtype=float).ravel()
         z = np.asarray(self.z, dtype=float).ravel()
         if x.shape != z.shape or x.size < 3:
             raise ValueError("a body needs at least 3 vertices with matching x and z")
-        if x[0] == x[-1] and z[0] == z[-1] and x.size > 3:
-            x, z = x[:-1], z[:-1]
+        # drop repeated consecutive vertices (closing vertex, pinch-outs)
+        keep = np.ones(x.size, dtype=bool)
+        tol = 1e-9 * max(np.ptp(x), np.ptp(z), 1.0)
+        for i in range(1, x.size):
+            if abs(x[i] - x[i - 1]) <= tol and abs(z[i] - z[i - 1]) <= tol:
+                keep[i] = False
+        if abs(x[0] - x[-1]) <= tol and abs(z[0] - z[-1]) <= tol:
+            keep[-1] = False
+        x, z = x[keep], z[keep]
+        if x.size < 3:
+            raise ValueError("a body needs at least 3 distinct vertices")
         area = 0.5 * np.sum(x * np.roll(z, -1) - np.roll(x, -1) * z)
         if abs(area) < 1e-12:
             raise ValueError("body has zero area")
@@ -109,6 +123,7 @@ class Body:
             "mag_inc": self.mag_inc,
             "mag_dec": self.mag_dec,
             "name": self.name,
+            "reference_density": self.reference_density,
         }
 
 
@@ -134,6 +149,51 @@ def circle(x_centre: float, z_centre: float, radius: float, n: int = 72, **props
     """Regular polygon approximating a horizontal cylinder."""
     t = np.linspace(0, 2 * np.pi, n, endpoint=False)
     return Body(x_centre + radius * np.cos(t), z_centre + radius * np.sin(t), **props)
+
+
+def layer(
+    x: Sequence[float],
+    z_top: float | Sequence[float],
+    z_bottom: float | Sequence[float],
+    density: float = 0.0,
+    reference_density: float = 0.0,
+    extend: float = 3e7,
+    **props,
+) -> Body:
+    """Layer between two horizons sampled at x (m), as one polygon.
+
+    z_top and z_bottom may be scalars or arrays on x (depth, positive
+    down). Both horizons continue horizontally for `extend` metres beyond
+    each end (default 30,000 km, as in GM-SYS) so the layer's own edges are
+    far from the section; a 1000 km extension already leaves a spurious
+    tilt of several mGal across a 400 km section for a mantle layer.
+    density minus reference_density is stored, so absolute densities can be
+    used with a common reference (2670 kg/m^3 for a Bouguer anomaly) or
+    contrasts with reference 0. The layer may pinch out (z_top == z_bottom
+    over part of the profile).
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    zt = np.broadcast_to(np.asarray(z_top, dtype=float), x.shape).astype(float)
+    zb = np.broadcast_to(np.asarray(z_bottom, dtype=float), x.shape).astype(float)
+    if np.any(zb < zt - 1e-9):
+        raise ValueError("z_bottom must not be above z_top anywhere")
+    if not np.any(zb > zt):
+        raise ValueError("layer has zero thickness everywhere")
+    xs = np.concatenate([[x[0] - extend], x, [x[-1] + extend]])
+    top = np.concatenate([[zt[0]], zt, [zt[-1]]])
+    bot = np.concatenate([[zb[0]], zb, [zb[-1]]])
+    return Body(
+        np.concatenate([xs, xs[::-1]]),
+        np.concatenate([top, bot[::-1]]),
+        density=density - reference_density,
+        reference_density=reference_density,
+        **props,
+    )
+
+
+def slab(density_contrast: float, thickness: float) -> float:
+    """Bouguer slab, 2 pi G rho t, in mGal: the gravity of an infinite flat layer."""
+    return 2 * np.pi * G * density_contrast * thickness * MGAL
 
 
 def save_bodies(bodies: Sequence[Body], path: str | Path) -> Path:
@@ -181,28 +241,43 @@ def magnetisation_in_plane(body: Body, inc: float, dec: float, azimuth: float, f
 # kernels -------------------------------------------------------------------
 
 
-def _edges(body: Body, x: np.ndarray, z_obs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _edges(body: Body, x: np.ndarray, z_obs: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Complex positions a, b of each edge's end points relative to every
-    observation point. Shape (n_edges, n_obs)."""
-    if np.any(body.z[:, None] <= z_obs[None, :]):
-        raise ValueError(f"body {body.name!r} has vertices at or above an observation point; bodies must lie below the sensor")
+    observation point, shape (n_edges, n_obs), and ln(b/a), whose imaginary
+    part is the angle each edge subtends. Observation points must lie
+    outside the body and off its vertices."""
     qx = body.x[:, None] - x[None, :]
     qz = body.z[:, None] - z_obs[None, :]
-    q = qx + 1j * qz
-    return q, np.roll(q, -1, axis=0)
+    a = qx + 1j * qz
+    scale = max(np.ptp(body.x), np.ptp(body.z))
+    if np.any(np.abs(a) < 1e-9 * scale):
+        raise ValueError(f"an observation point coincides with a vertex of body {body.name!r}")
+    b = np.roll(a, -1, axis=0)
+    lnr = np.log(b / a)
+    winding = np.abs(lnr.imag.sum(axis=0))
+    if np.any(winding > np.pi):
+        raise ValueError(f"an observation point lies inside body {body.name!r}; the kernels are for external points")
+    return a, b, lnr
 
 
 def gravity_components(bodies: Sequence[Body], x: np.ndarray, z_obs: float | np.ndarray = 0.0) -> tuple[np.ndarray, np.ndarray]:
-    """(gx, gz) in m/s^2 along and down. gz positive toward the body."""
+    """(gx, gz) in m/s^2 along and down. gz positive toward the body.
+
+    Valid for observation points anywhere outside the bodies, including
+    beside a body or below its top, as for stations on rugged terrain.
+    """
     x = np.asarray(x, dtype=float).ravel()
     z_obs = np.broadcast_to(np.asarray(z_obs, dtype=float), x.shape)
     total = np.zeros(x.shape, dtype=complex)
     for body in bodies:
         if body.density == 0.0:
             continue
-        a, b = _edges(body, x, z_obs)
+        a, b, lnr = _edges(body, x, z_obs)
         d = b - a
-        term = (d / np.conj(d)) * np.conj(b * np.log(b) - a * np.log(a)) - d
+        # branch of ln q continuous round the boundary: principal log at the
+        # first vertex, then accumulate the subtended angles edge by edge
+        la = np.log(a[0])[None, :] + np.concatenate([np.zeros((1, a.shape[1])), np.cumsum(lnr, axis=0)[:-1]], axis=0)
+        term = d * np.conj(la) + (d * np.conj(b) / np.conj(d)) * np.conj(lnr) - d
         total += -1j * G * body.density * term.sum(axis=0)
     return total.real, total.imag
 
@@ -224,12 +299,12 @@ def magnetic_components(
         mx, mz = magnetisation_in_plane(body, inc, dec, azimuth, field_nt)
         if mx == 0.0 and mz == 0.0:
             continue
-        a, b = _edges(body, x, z_obs)
+        a, b, lnr = _edges(body, x, z_obs)
         d = b - a
         e = d / np.abs(d)  # unit tangent, counterclockwise
         nx, nz = e.imag, -e.real  # outward normal for counterclockwise vertices
         sigma = mx * nx + mz * nz  # pole density on each edge (n_edges, n_obs; constant along n_obs)
-        total += (-2 * CM * sigma * e * np.conj(np.log(b / a))).sum(axis=0)
+        total += (-2 * CM * sigma * e * np.conj(lnr)).sum(axis=0)
     return total.real * NT, total.imag * NT
 
 
@@ -371,7 +446,10 @@ def plot_model(
         if name in predicted:
             ax.plot(xk, predicted[name], "-", color="tab:red", lw=1.5, label="predicted")
         if regional_part and name in regional_part:
-            ax.plot(xk, regional_part[name], "--", color="tab:gray", lw=1, label="regional")
+            reg = np.asarray(regional_part[name], dtype=float)
+            span = np.ptp(observed[name][np.isfinite(observed[name])]) if name in observed else np.ptp(reg)
+            if np.ptp(reg) > 0.01 * span:  # a pure DC shift is not worth a line
+                ax.plot(xk, reg, "--", color="tab:gray", lw=1, label="regional")
         if name in observed and name in predicted:
             ax.set_title(f"{name}: rms {rms(observed[name], predicted[name]):.3g} {units[name]}", loc="left", fontsize=9)
         ax.set_ylabel(units[name])
@@ -379,22 +457,32 @@ def plot_model(
         ax.legend(loc="upper right", fontsize=8)
     sec = axes[-1]
     colours = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    from shapely.geometry import Polygon, box
+
+    zo = np.broadcast_to(np.asarray(z_obs, dtype=float), np.shape(x))
+    zmax_plot = depth_max if depth_max is not None else max(b.z.max() for b in bodies) * 1.2
+    ztop_plot = min(zo.min(), min(b.z.min() for b in bodies), 0.0)
+    window = box(float(np.min(x)), ztop_plot, float(np.max(x)), zmax_plot)
     for i, b in enumerate(bodies):
         sec.fill(b.x / 1e3, b.z / 1e3, color=colours[i % len(colours)], alpha=0.6, ec="k", lw=0.8)
-        cx, cz = b.centroid
+        # label the part of the body that is on the section; layers extend far beyond it
+        visible = Polygon(zip(b.x, b.z)).buffer(0).intersection(window)
+        if visible.is_empty:
+            continue
+        cx, cz = visible.centroid.x, visible.centroid.y
         label = b.name or f"body {i + 1}"
         props = []
-        if b.density:
-            props.append(f"{b.density:+.3g} kg/m3")
+        if b.reference_density:
+            props.append(f"{(b.density + b.reference_density) / 1000:.2f} g/cc")
+        elif b.density:
+            props.append(f"{b.density / 1000:.2f} g/cc" if abs(b.density) >= 1000 else f"{b.density:+.3g} kg/m3")
         if b.susceptibility:
             props.append(f"k={b.susceptibility:.3g}")
         if b.magnetisation:
             props.append(f"M={b.magnetisation:.3g} A/m")
         sec.annotate("\n".join([label] + props), (cx / 1e3, cz / 1e3), ha="center", va="center", fontsize=8)
-    zo = np.broadcast_to(np.asarray(z_obs, dtype=float), np.shape(x))
     sec.plot(xk, zo / 1e3, color="k", lw=0.8)
-    zmax = depth_max if depth_max is not None else max(b.z.max() for b in bodies) * 1.2
-    sec.set_ylim(zmax / 1e3, min(zo.min() / 1e3, 0) - 0.02 * zmax / 1e3)
+    sec.set_ylim(zmax_plot / 1e3, ztop_plot / 1e3 - 0.02 * (zmax_plot - ztop_plot) / 1e3)
     sec.set_xlim(xk.min(), xk.max())
     sec.set_xlabel("distance (km)")
     sec.set_ylabel("depth (km)")

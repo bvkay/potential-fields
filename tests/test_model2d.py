@@ -137,12 +137,74 @@ def test_superposition_zero_and_far_field():
     assert abs(both["gravity"][0]) < 0.1 * np.max(np.abs(both["gravity"]))
 
 
-def test_observation_must_be_above_bodies():
-    body = model2d.rectangle(-500, 500, 200, 800, density=300)
+def test_observation_beside_body_and_inside_check():
+    # Stations level with or below the top of a body (rugged terrain) must
+    # still be right: a cylinder seen from a point at the depth of its
+    # centre attracts horizontally only. Points inside a body raise.
+    rho, kappa = 500.0, 0.02
+    body = model2d.circle(0.0, ZC, R, n=180, density=rho, susceptibility=kappa)
+    xo = np.array([3 * R, 5 * R, -4 * R])
+    gx, gz = model2d.gravity_components([body], xo, z_obs=ZC)
+    want_gx = 2 * G * rho * body.area * (0.0 - xo) / xo**2  # toward the body
+    assert np.allclose(gx, want_gx, rtol=0.005)
+    assert np.allclose(gz, 0.0, atol=1e-3 * np.abs(want_gx).max())
+    # stations below the top of the cylinder, above its centre, off to the side
+    xo = np.linspace(2 * R, 10 * R, 50)
+    zo = ZC - 0.5 * R
+    gx, gz = model2d.gravity_components([body], xo, z_obs=zo)
+    dx, dz = 0.0 - xo, ZC - zo
+    r2 = dx**2 + dz**2
+    assert np.allclose(gx, 2 * G * rho * body.area * dx / r2, rtol=0.005)
+    assert np.allclose(gz, 2 * G * rho * body.area * dz / r2, rtol=0.005)
+    bx, bz = model2d.magnetic_components([body], xo, -60.0, 7.0, 0.0, F_NT, z_obs=zo)
+    fx, fz = model2d.in_plane_direction(-60.0, 7.0, 0.0)
+    m = model2d.induced_magnetisation(kappa, F_NT) * body.area
+    mx, mz = m * fx, m * fz
+    mr = (mx * -dx + mz * -dz) / r2  # r from source to observation is (-dx, -dz)
+    want_bx = NT * 2 * CM * (2 * mr * -dx - mx) / r2
+    want_bz = NT * 2 * CM * (2 * mr * -dz - mz) / r2
+    assert np.allclose(bx, want_bx, rtol=0.005, atol=1e-3 * np.abs(want_bx).max())
+    assert np.allclose(bz, want_bz, rtol=0.005, atol=1e-3 * np.abs(want_bz).max())
     with pytest.raises(ValueError):
-        model2d.gravity([body], X, z_obs=250.0)
-    # a sensor 80 m above ground (z = -80) is fine
-    assert np.isfinite(model2d.gravity([body], X, z_obs=-80.0)).all()
+        model2d.gravity([body], np.array([0.0]), z_obs=ZC)  # inside
+    with pytest.raises(ValueError):
+        model2d.gravity([body], np.array([R]), z_obs=ZC)  # on a vertex
+    # a sensor 80 m above ground over a shallow body is fine
+    assert np.isfinite(model2d.gravity([model2d.rectangle(-500, 500, 200, 800, density=300)], X, z_obs=-80.0)).all()
+
+
+def test_layer_matches_bouguer_slab():
+    # A flat layer extended far beyond the section is a Bouguer slab:
+    # 2 pi G rho t, independent of depth. Fails if the extension or the
+    # branch handling for a very wide polygon is wrong.
+    x = np.linspace(0.0, 400e3, 201)
+    lay = model2d.layer(x, 5000.0, 12000.0, density=2900.0, reference_density=2670.0)
+    g = model2d.gravity([lay], x)
+    want = model2d.slab(230.0, 7000.0)
+    assert np.allclose(g, want, rtol=1e-3)
+    assert lay.density == pytest.approx(230.0) and lay.reference_density == 2670.0
+    back = model2d.Body(**lay.to_dict())
+    assert back.reference_density == 2670.0 and back.density == pytest.approx(230.0)
+    # stations on a topographic surface above a layer whose top is the datum
+    elev = 800.0 * np.exp(-((x - 200e3) / 60e3) ** 2)
+    g2 = model2d.gravity([lay], x, z_obs=-elev)
+    assert np.all(np.abs(g2 - want) < 0.02 * abs(want))  # slab is insensitive to height
+
+
+def test_layer_pinchout_and_variable_horizons():
+    # A basin that pinches out at both ends equals the same polygon built
+    # by hand; the Body constructor must drop the repeated vertices.
+    x = np.linspace(0.0, 50e3, 26)
+    base = np.where((x > 10e3) & (x < 40e3), 2000.0 * np.sin(np.pi * (x - 10e3) / 30e3), 0.0)
+    basin = model2d.layer(x, 0.0, base, density=-350.0, extend=1e5)
+    g = model2d.gravity([basin], x[1:-1], z_obs=-1.0)
+    assert np.isfinite(g).all()
+    assert g.min() < -0.5 * abs(model2d.slab(-350.0, 2000.0))  # a deep basin gives most of the slab value
+    assert abs(g[0]) < 0.1 * abs(g.min())  # nothing where it has pinched out
+    with pytest.raises(ValueError):
+        model2d.layer(x, 100.0, 50.0)  # bottom above top
+    with pytest.raises(ValueError):
+        model2d.layer(x, 100.0, 100.0)  # zero thickness
 
 
 def test_induced_magnetisation_value():
