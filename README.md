@@ -10,12 +10,26 @@ the equations can be read next to the code.
 
 ## Install
 
+With conda, from the repo folder (recommended on Windows; rasterio and GDAL
+come from conda-forge and the package is installed in editable mode):
+
 ```bash
-pip install -e .
+conda env create -f environment.yml
 ```
 
-Needs numpy, scipy, rasterio (GDAL), pyproj, shapely, matplotlib, xarray.
-`pip install -e .[dev]` adds pytest and JupyterLab.
+```bash
+conda activate potfield
+```
+
+With pip into an existing Python 3.10 or later:
+
+```bash
+pip install -e .[dev]
+```
+
+Needs numpy, scipy, rasterio (GDAL), pyproj, shapely, matplotlib, xarray,
+pandas; `[dev]` adds pytest and JupyterLab. Check the install with `pytest`
+from the repo folder, then open `notebooks/` in JupyterLab.
 
 ## Quick start
 

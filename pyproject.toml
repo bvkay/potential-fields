@@ -18,6 +18,7 @@ dependencies = [
     "shapely>=2.0",
     "matplotlib>=3.7",
     "xarray>=2023.1",
+    "pandas>=2.0",
 ]
 
 [project.optional-dependencies]
