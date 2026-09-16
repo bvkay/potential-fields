@@ -213,6 +213,24 @@ class Grid:
         )
         return Grid(out, transform, dst_crs, self.name, self.units)
 
+    def regrid(self, like: "Grid", resampling: Resampling = Resampling.bilinear) -> "Grid":
+        """Resample onto the geometry (CRS, transform, shape) of another grid."""
+        if like.crs == self.crs and like.transform.almost_equals(self.transform) and like.shape == self.shape:
+            return self
+        out = np.full(like.shape, np.nan)
+        _warp_reproject(
+            source=self.values,
+            destination=out,
+            src_transform=self.transform,
+            src_crs=self.crs,
+            src_nodata=np.nan,
+            dst_transform=like.transform,
+            dst_crs=like.crs,
+            dst_nodata=np.nan,
+            resampling=resampling,
+        )
+        return Grid(out, like.transform, like.crs, self.name, self.units)
+
     # inspection ---------------------------------------------------------
 
     def stats(self) -> dict:

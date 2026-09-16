@@ -8,8 +8,9 @@ Conventions used throughout:
   positive north.
 """
 
-from .grid import Grid, read_grid, read_ers
-from .export import write_grid, write_xyz, write_netcdf
+from . import filters, spectrum, synthetic, transforms
+from .export import write_grid, write_netcdf, write_xyz
+from .grid import Grid, read_ers, read_grid
 
 __all__ = [
     "Grid",
@@ -18,6 +19,10 @@ __all__ = [
     "write_grid",
     "write_xyz",
     "write_netcdf",
+    "filters",
+    "transforms",
+    "spectrum",
+    "synthetic",
 ]
 
 __version__ = "0.1.0"
