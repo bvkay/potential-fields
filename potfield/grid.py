@@ -45,6 +45,7 @@ class Profile:
     values: np.ndarray
     name: str = ""
     units: str = ""
+    crs: CRS | None = None
 
     def __len__(self) -> int:
         return len(self.distance)
@@ -52,6 +53,16 @@ class Profile:
     @property
     def length(self) -> float:
         return float(self.distance[-1])
+
+    @property
+    def azimuth(self) -> float:
+        """Direction from start to end, degrees clockwise from north."""
+        if self.crs is not None and not self.crs.is_projected:
+            import pyproj
+
+            az, _, _ = pyproj.Geod(ellps="GRS80").inv(self.x[0], self.y[0], self.x[-1], self.y[-1])
+            return float(az % 360)
+        return float(np.degrees(np.arctan2(self.x[-1] - self.x[0], self.y[-1] - self.y[0])) % 360)
 
 
 @dataclass
@@ -294,7 +305,7 @@ class Grid:
 
             _, _, seg = pyproj.Geod(ellps="GRS80").inv(xs[:-1], ys[:-1], xs[1:], ys[1:])
             dist = np.concatenate([[0.0], np.cumsum(seg)])
-        return Profile(dist, xs, ys, vals, self.name, self.units)
+        return Profile(dist, xs, ys, vals, self.name, self.units, self.crs)
 
     # inspection ---------------------------------------------------------
 

@@ -10,7 +10,7 @@ Conventions used throughout:
 @author: Ben Kay (ben@auscope.org.au)
 """
 
-from . import filters, spectrum, synthetic, transforms
+from . import filters, model2d, spectrum, synthetic, transforms
 from .export import write_grid, write_netcdf, write_xyz
 from .grid import Grid, Profile, read_ers, read_grid
 
@@ -25,6 +25,7 @@ __all__ = [
     "filters",
     "transforms",
     "spectrum",
+    "model2d",
     "synthetic",
 ]
 

@@ -49,6 +49,7 @@ and uses a cos(lat) approximation, so reproject first.
 | `filters` | continuation, derivatives, THDR, analytic signal, tilt, Butterworth and Gaussian band filters, directional cosine, trend removal |
 | `transforms` | reduction to pole, pseudogravity, pseudomagnetic, moving-window Poisson analysis |
 | `spectrum` | radially averaged and 2D power spectra, depth from slope |
+| `model2d` | 2D polygon forward modelling of gravity and TMI along a profile, least-squares fitting, model plots |
 | `display` | clipped colour scales, sunshade, AGC, profile plots, 2D spectrum image, polyline overlays |
 | `synthetic` | analytic point mass and dipole fields used by the tests |
 
@@ -88,6 +89,7 @@ Run in order. They use the grids in `data/`.
 | 05 | power spectrum and depth to source |
 | 06 | combining gravity and magnetics with Poisson analysis |
 | 07 | the workflow on a second area, Eyre Peninsula, from projected grids |
+| 08 | 2D profile modelling: forward models of polygonal bodies, manual fitting, least squares |
 
 ## Command line
 
@@ -133,7 +135,9 @@ pytest
 Filters are checked against analytic point-mass and dipole fields: upward
 continuation, vertical and horizontal derivatives, analytic signal, tilt,
 RTP at several declinations and with remanence, pseudogravity via Poisson's
-relation, the Poisson regression slope, and power-spectrum depth. Each test
+relation, the Poisson regression slope, and power-spectrum depth. The 2D
+modelling kernels are checked against a line mass and line dipole (polygonal
+cylinder), a thin sheet, and each other through Poisson's relation. Each test
 states what would make it fail.
 
 ## References
