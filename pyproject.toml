@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "potfield"
+version = "0.1.0"
+description = "Frequency-domain filters and transforms for gridded gravity and magnetic data"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ben Kay" }]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "rasterio>=1.3",
+    "pyproj>=3.4",
+    "shapely>=2.0",
+    "matplotlib>=3.7",
+    "xarray>=2023.1",
+]
+
+[project.optional-dependencies]
+netcdf = ["netCDF4"]
+vector = ["geopandas"]
+dev = ["pytest", "jupyterlab"]
+
+[tool.setuptools.packages.find]
+include = ["potfield*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
