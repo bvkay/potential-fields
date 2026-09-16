@@ -1,0 +1,33 @@
+DatasetHeader Begin
+	Version	= "6.0"
+	Name	= "frome_cba.ers"
+	DataSetType	= ERStorage
+	DataType	= Raster
+	ByteOrder	= LSBFirst
+	CoordinateSpace Begin
+		Datum	= "GDA94"
+		Projection	= "GEODETIC"
+		CoordinateType	= LATLONG
+		Rotation	= 0:0:0.0
+	CoordinateSpace End
+	RasterInfo Begin
+		CellType	= IEEE4ByteReal
+		NullCellValue	= -99999
+		CellInfo Begin
+			Xdimension	= 0.00416666666667
+			Ydimension	= 0.00416666666667
+		CellInfo End
+		NrOfLines	= 480
+		NrOfCellsPerLine	= 480
+		NrOfBands	= 1
+		RegistrationCellX	= 0
+		RegistrationCellY	= 0
+		RegistrationCoord Begin
+			Longitude	= 138:41:52.500000
+			Latitude	= -29:29:52.500000
+		RegistrationCoord End
+		BandId Begin
+			Value	= "mGal"
+		BandId End
+	RasterInfo End
+DatasetHeader End

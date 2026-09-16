@@ -5,7 +5,10 @@ slope of ln P over any wavenumber band gives z0. The bands stop at a
 wavelength of 20 cells: beyond that a point-mass spectrum has dropped more
 than 20 orders of magnitude and the taper's leakage floor takes over, which
 no real grid approaches. Fails if the recovered depth is more than 5% off in
-the 60 to 20 cell band or 10% off in the 120 to 40 cell band."""
+the 60 to 20 cell band or 10% off in the 120 to 40 cell band.
+
+@author: Ben Kay (ben@auscope.org.au)
+"""
 
 import numpy as np
 import pytest

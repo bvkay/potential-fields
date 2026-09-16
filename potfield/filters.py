@@ -21,6 +21,8 @@ with k0 = 2*pi / cutoff wavelength. Derived products:
 
 Vertical derivatives use z positive down, the usual convention for potential
 field maps: the first vertical derivative is positive over a positive peak.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

@@ -6,6 +6,8 @@ Conventions used throughout:
 - Filter functions take cell sizes dx, dy in metres.
 - Wavenumbers are angular (rad/m): k = 2*pi*f. kx is positive east, ky
   positive north.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from . import filters, spectrum, synthetic, transforms

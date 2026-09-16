@@ -9,7 +9,7 @@ description = "Frequency-domain filters and transforms for gridded gravity and m
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Ben Kay" }]
+authors = [{ name = "Ben Kay", email = "ben@auscope.org.au" }]
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",

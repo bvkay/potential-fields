@@ -56,9 +56,22 @@ Every filter takes and returns a `Grid`. Filter responses are documented at
 the top of `filters.py` and `transforms.py` with page references to Blakely
 (1996).
 
+## Sample data
+
+`data/` holds two ER Mapper grids cut from Geoscience Australia national
+compilations over the Frome Embayment and northern Flinders Ranges
+(Arkaroola, Paralana, Beverley), GDA94 lat/lon:
+
+| file | source | cell |
+|---|---|---|
+| `frome_tmi.ers` | magmap_v6_2015 total magnetic intensity | 80 m |
+| `frome_cba.ers` | 2019 Australian National Gravity Grid A4, complete Bouguer anomaly | 400 m |
+
+`scripts/make_sample_data.py` rebuilds them from the full grids.
+
 ## Notebooks
 
-Run in order. They use the small grids in `data/`.
+Run in order. They use the grids in `data/`.
 
 | | |
 |---|---|

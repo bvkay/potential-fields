@@ -8,6 +8,8 @@ depth in km is -s / (4 pi).
 
 Deep sources dominate the low wavenumbers, shallow ones the high, so a
 spectrum is usually read as two or three straight segments.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

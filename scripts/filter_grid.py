@@ -12,6 +12,8 @@ Examples (run from the repo root):
 Output format follows the extension: .tif .grd (Surfer) .asc (Arc ASCII)
 .ers .nc .xyz. --epsg applies to the whole run, so the output CRS matches
 whatever database the file is going into.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

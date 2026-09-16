@@ -22,6 +22,8 @@ also holds point by point at the pole: dT_pole = Cm M / (G rho) * dg/dz.
 Regressing RTP magnetics against the first vertical derivative of gravity in
 a moving window gives that ratio where the two fields share a source
 (Chandler and Malek 1991).
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

@@ -6,6 +6,8 @@ western edge. Null cells are NaN.
 
 Reading goes through rasterio/GDAL, so any GDAL raster works: ERS, GeoTIFF,
 Surfer GRD, Arc ASCII, netCDF.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

@@ -16,6 +16,8 @@ Pipeline in apply():
 
 Wavenumber conventions: k = 2*pi*f in rad/m. kx is positive east (along
 columns). Rows run north to south, so ky = -2*pi*fy makes ky positive north.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

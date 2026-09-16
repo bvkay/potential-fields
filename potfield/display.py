@@ -5,6 +5,8 @@ between min and max hides most of the structure. clip_limits() gives
 standard-deviation or percentile limits; sunshade() adds a hillshade;
 agc() equalises amplitude locally so weak and strong anomalies show
 together.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

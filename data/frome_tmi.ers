@@ -1,0 +1,33 @@
+DatasetHeader Begin
+	Version	= "6.0"
+	Name	= "frome_tmi.ers"
+	DataSetType	= ERStorage
+	DataType	= Raster
+	ByteOrder	= LSBFirst
+	CoordinateSpace Begin
+		Datum	= "GDA94"
+		Projection	= "GEODETIC"
+		CoordinateType	= LATLONG
+		Rotation	= 0:0:0.0
+	CoordinateSpace End
+	RasterInfo Begin
+		CellType	= IEEE4ByteReal
+		NullCellValue	= -99999
+		CellInfo Begin
+			Xdimension	= 0.000833333
+			Ydimension	= 0.000833333
+		CellInfo End
+		NrOfLines	= 840
+		NrOfCellsPerLine	= 900
+		NrOfBands	= 1
+		RegistrationCellX	= 0
+		RegistrationCellY	= 0
+		RegistrationCoord Begin
+			Longitude	= 139:12:0.077150
+			Latitude	= -30:2:59.351127
+		RegistrationCoord End
+		BandId Begin
+			Value	= "nT"
+		BandId End
+	RasterInfo End
+DatasetHeader End

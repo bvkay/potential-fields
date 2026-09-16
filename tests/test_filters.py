@@ -3,6 +3,8 @@
 Comparisons exclude a margin of 10% of the grid on each side. Each test
 fails if the RMS misfit over the interior exceeds the stated fraction of the
 analytic peak amplitude. Both an even and an odd grid size are run.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 import numpy as np

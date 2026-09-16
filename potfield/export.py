@@ -6,6 +6,11 @@ writing; Geotools needs the file CRS to match its database CRS.
 Sidecar files: Arc ASCII gets a .prj, Surfer GRD gets a .aux.xml with the CRS
 (Surfer's own format has no CRS field). Surfer null cells are written with
 Surfer's blank value 1.70141e38; the nodata argument is ignored for .grd.
+ERS is written directly (write_ers) so lat/lon grids get a LATLONG header
+like the Geoscience Australia grids; GDAL's ERS driver writes EN for
+everything.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations
@@ -51,6 +56,8 @@ def write_grid(
         return write_xyz(grid, path)
     if ext == ".nc":
         return write_netcdf(grid, path)
+    if ext == ".ers" and driver is None:
+        return write_ers(grid, path, nodata=nodata)
     driver = driver or DRIVERS.get(ext)
     if driver is None:
         raise ValueError(f"no driver for extension {ext!r}")
@@ -77,6 +84,105 @@ def write_grid(
         dst.write(data, 1)
         if grid.units:
             dst.update_tags(1, units=grid.units)
+    return path
+
+
+def _dms(deg: float) -> str:
+    """Decimal degrees to ER Mapper D:M:S with the sign on the degrees field."""
+    sign = "-" if deg < 0 else ""
+    deg = abs(deg)
+    d = int(deg)
+    m = int((deg - d) * 60)
+    s = (deg - d - m / 60) * 3600
+    return f"{sign}{d}:{m}:{s:.6f}"
+
+
+def _ers_coordinate_space(crs: CRS) -> tuple[str, str, str]:
+    """(Datum, Projection, CoordinateType) for an ERS header.
+
+    Uses ER Mapper names where they are certain (GDA94 geodetic and MGA
+    zones, WGS84 geodetic) and "EPSG:code" otherwise, which GDAL and recent
+    ER Mapper-family software read back.
+    """
+    import pyproj
+
+    pc = pyproj.CRS(crs.to_wkt())
+    epsg = pc.to_epsg(min_confidence=25)
+    if pc.is_geographic:
+        datum = (pc.datum.name if pc.datum else "") or ""
+        if epsg == 4283 or "GDA94" in datum or "Australia 1994" in datum:
+            return "GDA94", "GEODETIC", "LATLONG"
+        if epsg == 4326 or "WGS 84" in datum or "WGS84" in datum:
+            return "WGS84", "GEODETIC", "LATLONG"
+        if epsg is not None:
+            return f"EPSG:{epsg}", "GEODETIC", "LATLONG"
+        raise ValueError("cannot name this geographic CRS for ERS; reproject to a known EPSG first")
+    if epsg is not None and 28349 <= epsg <= 28356:
+        return "GDA94", f"MGA{epsg - 28300}", "EN"
+    if epsg is not None:
+        return f"EPSG:{epsg}", f"EPSG:{epsg}", "EN"
+    raise ValueError("cannot name this projected CRS for ERS; reproject to a known EPSG first")
+
+
+def write_ers(grid: Grid, path: str | Path, nodata: float = -99999.0, epsg: int | None = None) -> Path:
+    """ER Mapper grid: text header `name.ers` plus flat little-endian float32 `name`.
+
+    The header follows the Geoscience Australia layout: LATLONG grids carry
+    the registration point as Longitude/Latitude in D:M:S, projected grids
+    as Eastings/Northings in metres. Registration cell (0, 0) is the top-left
+    corner of the top-left cell, which is what GDAL assumes on read.
+    """
+    path = Path(path)
+    if path.suffix.lower() != ".ers":
+        path = path.with_suffix(".ers")
+    grid = _prepare(grid, epsg)
+    datum, projection, ctype = _ers_coordinate_space(grid.crs)
+    w, s, e, n = grid.bounds
+    if ctype == "LATLONG":
+        reg = f"\t\t\tLongitude\t= {_dms(w)}\n\t\t\tLatitude\t= {_dms(n)}\n"
+        units = ""
+    else:
+        reg = f"\t\t\tEastings\t= {w:.6f}\n\t\t\tNorthings\t= {n:.6f}\n"
+        units = '\t\tUnits\t= "METERS"\n'
+    header = (
+        "DatasetHeader Begin\n"
+        '\tVersion\t= "6.0"\n'
+        f'\tName\t= "{path.name}"\n'
+        "\tDataSetType\t= ERStorage\n"
+        "\tDataType\t= Raster\n"
+        "\tByteOrder\t= LSBFirst\n"
+        "\tCoordinateSpace Begin\n"
+        f'\t\tDatum\t= "{datum}"\n'
+        f'\t\tProjection\t= "{projection}"\n'
+        f"\t\tCoordinateType\t= {ctype}\n"
+        f"{units}"
+        "\t\tRotation\t= 0:0:0.0\n"
+        "\tCoordinateSpace End\n"
+        "\tRasterInfo Begin\n"
+        "\t\tCellType\t= IEEE4ByteReal\n"
+        f"\t\tNullCellValue\t= {nodata:g}\n"
+        "\t\tCellInfo Begin\n"
+        f"\t\t\tXdimension\t= {grid.dx:.12g}\n"
+        f"\t\t\tYdimension\t= {grid.dy:.12g}\n"
+        "\t\tCellInfo End\n"
+        f"\t\tNrOfLines\t= {grid.ny}\n"
+        f"\t\tNrOfCellsPerLine\t= {grid.nx}\n"
+        "\t\tNrOfBands\t= 1\n"
+        "\t\tRegistrationCellX\t= 0\n"
+        "\t\tRegistrationCellY\t= 0\n"
+        "\t\tRegistrationCoord Begin\n"
+        f"{reg}"
+        "\t\tRegistrationCoord End\n"
+        "\t\tBandId Begin\n"
+        f'\t\t\tValue\t= "{grid.units or grid.name or "value"}"\n'
+        "\t\tBandId End\n"
+        "\tRasterInfo End\n"
+        "DatasetHeader End\n"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(header, encoding="ascii", newline="\n")
+    data = np.where(np.isfinite(grid.values), grid.values, nodata).astype("<f4")
+    data.tofile(path.with_suffix(""))
     return path
 
 

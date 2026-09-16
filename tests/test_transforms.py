@@ -1,7 +1,10 @@
 """RTP, pseudogravity, pseudomagnetic and Poisson analysis against analytic dipole
 and point-mass fields. Comparisons are within 2*z0 of the source, where the
 fields are well above edge noise. Each test fails at the stated RMS misfit
-relative to the analytic peak."""
+relative to the analytic peak.
+
+@author: Ben Kay (ben@auscope.org.au)
+"""
 
 import numpy as np
 import pytest

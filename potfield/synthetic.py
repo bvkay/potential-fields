@@ -4,6 +4,8 @@ Coordinates: x east, y north, in metres relative to the source, which sits at
 depth z0 below the observation plane. Inclination is positive down,
 declination positive clockwise from north. Field units: gravity in m/s^2 for
 G*m = 1 (relative), or mGal when a real mass is given; TMI in nT.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+"""@author: Ben Kay (ben@auscope.org.au)
+"""
+
 import numpy as np
 import pytest
 from rasterio.crs import CRS

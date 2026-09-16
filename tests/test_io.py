@@ -2,6 +2,8 @@
 
 Each test states what would make it fail. All compare against independently
 computed expectations, not against the code under test.
+
+@author: Ben Kay (ben@auscope.org.au)
 """
 
 from pathlib import Path
@@ -30,6 +32,26 @@ def test_roundtrip_formats(mga_grid, tmp_path, ext):
     assert back.transform.almost_equals(mga_grid.transform, precision=1e-6)
     assert back.crs.is_projected
     assert pyproj.CRS(back.crs.to_wkt()).equals(pyproj.CRS.from_epsg(28354), ignore_axis_order=True)
+
+
+def test_ers_header_geographic_and_projected(geo_grid, mga_grid, tmp_path):
+    # Fails if a lat/lon grid is not written as LATLONG with D:M:S
+    # registration, if GDAL cannot read the header back to the same
+    # geotransform, or if the MGA grid does not get the ER Mapper zone name.
+    p = write_grid(geo_grid, tmp_path / "geo.ers")
+    text = p.read_text()
+    assert "CoordinateType\t= LATLONG" in text and "Longitude\t= 140:0:0" in text
+    assert 'Projection\t= "GEODETIC"' in text and 'Datum\t= "GDA94"' in text
+    back = read_grid(p)
+    assert back.transform.almost_equals(geo_grid.transform, precision=1e-9)
+    assert not back.is_projected
+    finite = np.isfinite(geo_grid.values)
+    assert np.max(np.abs(back.values[finite] - geo_grid.values[finite])) < 1e-3
+
+    p2 = write_grid(mga_grid, tmp_path / "mga.ers")
+    text2 = p2.read_text()
+    assert 'Projection\t= "MGA54"' in text2 and "CoordinateType\t= EN" in text2
+    assert (tmp_path / "mga").stat().st_size == mga_grid.values.size * 4
 
 
 def test_roundtrip_netcdf(mga_grid, tmp_path):
