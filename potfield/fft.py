@@ -167,15 +167,31 @@ def apply(
     return out
 
 
-def power_spectrum(values: np.ndarray, dx: float, dy: float, pad: int | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """Two-sided power spectrum |F|^2 and matching |k| grid, same pre-processing as apply()."""
+def power_spectrum(
+    values: np.ndarray, dx: float, dy: float, pad: int | None = None, window: float = 0.5
+) -> tuple[np.ndarray, np.ndarray]:
+    """Two-sided power spectrum |F|^2 and matching |k| grid.
+
+    Same NaN fill and boundary-plane removal as apply(), then a 2D Tukey
+    window (flat centre, cosine taper over `window` of each side) and zero
+    padding by `pad` cells. For spectral estimates a window is the right
+    tool: the straight grid edges otherwise leak energy into a bright cross
+    along the kx and ky axes that hides real spokes. Zero padding only
+    refines the wavenumber sampling.
+    """
+    from scipy.signal.windows import tukey
+
     values = np.asarray(values, dtype=np.float64)
     v = fill_nan(values)
     a, b, c = fit_plane(v, dx, dy)
     xx, yy = local_coords(v.shape, dx, dy)
     v = v - (a * xx + b * yy + c)
-    width = default_pad(v.shape) if pad is None else int(pad)
-    p = pad_taper(v, width)
+    ny, nx = v.shape
+    v = v * np.outer(tukey(ny, alpha=window), tukey(nx, alpha=window))
+    width = default_pad(v.shape) if pad is None else max(0, int(pad))
+    fast = (sfft.next_fast_len(ny + 2 * width), sfft.next_fast_len(nx + 2 * width))
+    p = np.zeros(fast)
+    p[width : width + ny, width : width + nx] = v
     F = sfft.fft2(p, workers=-1)
     k, _, _ = wavenumbers(p.shape, dx, dy)
     return np.abs(F) ** 2, k
