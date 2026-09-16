@@ -50,6 +50,7 @@ and uses a cos(lat) approximation, so reproject first.
 | `transforms` | reduction to pole, pseudogravity, pseudomagnetic, moving-window Poisson analysis |
 | `spectrum` | radially averaged and 2D power spectra, depth from slope |
 | `model2d` | 2D polygon forward modelling of gravity and TMI along a profile, layered sections, least-squares fitting, model plots |
+| `worms` | multiscale edges: edge strings at a ladder of continuation heights, linking, decay depth, apparent dip, map and 3D plots, CSV and VTK export |
 | `display` | clipped colour scales, sunshade, AGC, profile plots, 2D spectrum image, polyline overlays |
 | `synthetic` | analytic point mass and dipole fields used by the tests |
 
@@ -91,6 +92,7 @@ Run in order. They use the grids in `data/`.
 | 07 | the workflow on a second area, Eyre Peninsula, from projected grids |
 | 08 | 2D profile modelling: forward models of polygonal bodies, manual fitting, least squares |
 | 09 | layered crustal-scale gravity model in the GM-SYS style: slab check, layer contributions, Moho fit, basin depth |
+| 10 | multiscale edges ("worms") on synthetic structures and the Eyre Peninsula: edge strings stacked over continuation height, dips and depths from their migration and decay, 3D export |
 
 ## Command line
 

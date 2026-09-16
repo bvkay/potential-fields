@@ -113,6 +113,55 @@ def pad_taper(values: np.ndarray, width: int) -> np.ndarray:
     return padded * np.outer(window(ny), window(nx))
 
 
+class Prepared:
+    """A grid taken through steps 1 to 3 of the pipeline with its FFT stored,
+    so several filters can be applied without repeating the forward
+    transform. Created by prepare(); consumed by finish()."""
+
+    def __init__(self, values: np.ndarray, dx: float, dy: float, pad: int | None):
+        values = np.asarray(values, dtype=np.float64)
+        self.shape = values.shape
+        self.mask = np.isnan(values)
+        v = fill_nan(values)
+        self.plane = fit_plane(v, dx, dy)
+        self.xx, self.yy = local_coords(v.shape, dx, dy)
+        a, b, c = self.plane
+        v = v - (a * self.xx + b * self.yy + c)
+        self.width = default_pad(v.shape) if pad is None else max(0, int(pad))
+        p = pad_taper(v, self.width)
+        fast = (sfft.next_fast_len(p.shape[0]), sfft.next_fast_len(p.shape[1]))
+        p = np.pad(p, ((0, fast[0] - p.shape[0]), (0, fast[1] - p.shape[1])))
+        self.F = sfft.fft2(p, workers=-1)
+        self.k, self.kx, self.ky = wavenumbers(p.shape, dx, dy)
+
+    def response(self, fn: Response) -> np.ndarray:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            H = np.asarray(fn(self.k, self.kx, self.ky))
+        return np.where(np.isfinite(H), H, 0.0)
+
+
+def prepare(values: np.ndarray, dx: float, dy: float, pad: int | None = None) -> Prepared:
+    return Prepared(values, dx, dy, pad)
+
+
+def finish(prep: Prepared, H: np.ndarray, plane: str = "keep") -> np.ndarray:
+    """Steps 4 and 5 for one response H: inverse FFT, trim, restore the plane and the NaNs."""
+    if plane not in PLANE_MODES:
+        raise ValueError(f"plane must be one of {PLANE_MODES}")
+    ny, nx = prep.shape
+    w = prep.width
+    out = np.real(sfft.ifft2(prep.F * H, workers=-1))[w : w + ny, w : w + nx]
+    a, b, c = prep.plane
+    if plane == "keep":
+        out = out + (a * prep.xx + b * prep.yy + c)
+    elif plane == "dx":
+        out = out + a
+    elif plane == "dy":
+        out = out + b
+    out[prep.mask] = np.nan
+    return out
+
+
 def apply(
     values: np.ndarray,
     dx: float,
@@ -134,37 +183,21 @@ def apply(
     Returns an array the same shape as values with NaNs where the input had
     them.
     """
-    if plane not in PLANE_MODES:
-        raise ValueError(f"plane must be one of {PLANE_MODES}")
-    values = np.asarray(values, dtype=np.float64)
-    mask = np.isnan(values)
-    v = fill_nan(values)
-    a, b, c = fit_plane(v, dx, dy)
-    xx, yy = local_coords(v.shape, dx, dy)
-    v = v - (a * xx + b * yy + c)
+    prep = prepare(values, dx, dy, pad)
+    return finish(prep, prep.response(response), plane)
 
-    ny, nx = v.shape
-    width = default_pad(v.shape) if pad is None else max(0, int(pad))
-    p = pad_taper(v, width)
-    fast = (sfft.next_fast_len(p.shape[0]), sfft.next_fast_len(p.shape[1]))
-    p = np.pad(p, ((0, fast[0] - p.shape[0]), (0, fast[1] - p.shape[1])))
 
-    k, kx, ky = wavenumbers(p.shape, dx, dy)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        H = np.asarray(response(k, kx, ky))
-    H = np.where(np.isfinite(H), H, 0.0)
-
-    out = np.real(sfft.ifft2(sfft.fft2(p, workers=-1) * H, workers=-1))
-    out = out[width : width + ny, width : width + nx]
-
-    if plane == "keep":
-        out = out + (a * xx + b * yy + c)
-    elif plane == "dx":
-        out = out + a
-    elif plane == "dy":
-        out = out + b
-    out[mask] = np.nan
-    return out
+def apply_many(
+    values: np.ndarray,
+    dx: float,
+    dy: float,
+    responses: list[Response],
+    planes: list[str],
+    pad: int | None = None,
+) -> list[np.ndarray]:
+    """apply() for several responses sharing one forward FFT."""
+    prep = prepare(values, dx, dy, pad)
+    return [finish(prep, prep.response(r), p) for r, p in zip(responses, planes)]
 
 
 def power_spectrum(
