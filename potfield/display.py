@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
+from matplotlib.ticker import FuncFormatter
 from scipy.ndimage import gaussian_filter
 
 from .grid import Grid
@@ -98,9 +99,16 @@ def plot(
         hs = sunshade(grid, **shade)
         ax.imshow(hs, extent=grid.extent, origin="upper", cmap="gray", alpha=0.35, vmin=0, vmax=1)
     ax.set_aspect("equal")
-    unit = "m" if grid.is_projected else "deg"
-    ax.set_xlabel(f"Easting ({unit})" if grid.is_projected else "Longitude (deg)")
-    ax.set_ylabel(f"Northing ({unit})" if grid.is_projected else "Latitude (deg)")
+    if grid.is_projected:
+        # data stay in metres so contours and overlays line up; ticks read in km
+        km = FuncFormatter(lambda v, pos: f"{v / 1000:g}")
+        ax.xaxis.set_major_formatter(km)
+        ax.yaxis.set_major_formatter(km)
+        ax.set_xlabel("Easting (km)")
+        ax.set_ylabel("Northing (km)")
+    else:
+        ax.set_xlabel("Longitude (deg)")
+        ax.set_ylabel("Latitude (deg)")
     ax.set_title(title if title is not None else grid.name)
     if colorbar:
         cb = plt.colorbar(im, ax=ax, shrink=0.8)

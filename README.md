@@ -58,16 +58,21 @@ the top of `filters.py` and `transforms.py` with page references to Blakely
 
 ## Sample data
 
-`data/` holds two ER Mapper grids cut from Geoscience Australia national
-compilations over the Frome Embayment and northern Flinders Ranges
-(Arkaroola, Paralana, Beverley), GDA94 lat/lon:
+`data/` holds ER Mapper grids for two areas, cut from Geoscience Australia
+and Geological Survey of South Australia compilations. About 24 MB in total.
 
-| file | source | cell |
-|---|---|---|
-| `frome_tmi.ers` | magmap_v6_2015 total magnetic intensity | 80 m |
-| `frome_cba.ers` | 2019 Australian National Gravity Grid A4, complete Bouguer anomaly | 400 m |
+| file | area | source | cell | CRS |
+|---|---|---|---|---|
+| `frome_tmi.ers` | Frome Embayment, northern Flinders Ranges | GA magmap_v6_2015 TMI | 80 m | GDA94 lat/lon |
+| `frome_grav.ers` | same | SA GRAVITY 2016 Bouguer anomaly | 200 m | GDA94 MGA zone 54 |
+| `eyre_tmi.ers` | Eyre Peninsula | SA TMI 2011 compilation, averaged | 200 m | GDA94 MGA zone 53 |
+| `eyre_grav.ers` | same | SA GRAVITY 2016 Bouguer anomaly | 400 m | GDA94 MGA zone 53 |
 
-`scripts/make_sample_data.py` rebuilds them from the full grids.
+The Frome TMI is stored in lat/lon so the notebooks show the warp to
+metres; the Eyre grids are stored projected and have null cells over the
+sea. Gravity is in mGal. Note that the GA national gravity grids (2016 and
+2019) are in um/s^2, ten times the mGal value. `scripts/make_sample_data.py`
+rebuilds everything from the full grids.
 
 ## Notebooks
 
@@ -82,6 +87,7 @@ Run in order. They use the grids in `data/`.
 | 04 | reduction to pole and pseudogravity |
 | 05 | power spectrum and depth to source |
 | 06 | combining gravity and magnetics with Poisson analysis |
+| 07 | the workflow on a second area, Eyre Peninsula, from projected grids |
 
 ## Command line
 
@@ -98,6 +104,25 @@ Geotools needs the file CRS to match its database. Pass `epsg=` to
 writing. Surfer `.grd` (binary, Surfer 6) and Arc ASCII `.asc` both load in
 Geotools; GeoTIFF is the natural choice for QGIS. Surfer has no CRS field, so
 a `.aux.xml` sidecar carries it.
+
+## EPSG codes
+
+Common Australian codes for `epsg=`. MGA zones are 6 degrees wide
+(zone 53: 132 to 138 E, zone 54: 138 to 144 E). `Grid.mga_epsg()` returns
+the zone under a grid's centre. Notebook 00 has the full list with a
+pyproj check.
+
+| CRS | EPSG |
+|---|---|
+| GDA94, GDA2020, WGS 84 geographic | 4283, 7844, 4326 |
+| GDA94 / MGA zones 49 to 56 | 28349 to 28356 |
+| GDA2020 / MGA zones 49 to 56 | 7849 to 7856 |
+| AGD66 / AMG, AGD84 / AMG zones 49 to 56 | 20249 to 20256, 20349 to 20356 |
+| GDA94 / Geoscience Australia Lambert, GDA2020 / GA LCC | 3112, 7845 |
+| GDA94 / Australian Albers, GDA2020 / Australian Albers | 3577, 9473 |
+| GDA94 / SA Lambert, GDA2020 / SA Lambert | 3107, 8059 |
+| GDA94 / NSW Lambert, GDA2020 / NSW Lambert | 3308, 8058 |
+| GDA94 / Vicgrid, GDA2020 / Vicgrid | 3111, 7899 |
 
 ## Tests
 
