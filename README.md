@@ -29,7 +29,10 @@ pip install -e .[dev]
 
 Needs numpy, scipy, rasterio (GDAL), pyproj, shapely, matplotlib, xarray,
 pandas; `[dev]` adds pytest and JupyterLab. Check the install with `pytest`
-from the repo folder, then open `notebooks/` in JupyterLab.
+from the repo folder, then open `notebooks/` in JupyterLab. On Windows a
+crash message can occasionally appear after the pytest summary line as the
+interpreter shuts down and unloads GDAL and HDF5; the results above it
+stand.
 
 ## Quick start
 

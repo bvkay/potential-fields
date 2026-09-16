@@ -58,12 +58,12 @@ def test_roundtrip_netcdf(mga_grid, tmp_path):
     import xarray as xr
 
     p = write_netcdf(mga_grid, tmp_path / "g.nc")
-    da = xr.open_dataarray(p)
-    assert da.shape == mga_grid.shape
-    assert np.allclose(da.x.values, mga_grid.x)
-    assert np.allclose(da.y.values, mga_grid.y)
-    assert np.array_equal(np.isnan(da.values), np.isnan(mga_grid.values))
-    assert da.attrs["epsg"] == 28354
+    with xr.open_dataarray(p) as da:
+        assert da.shape == mga_grid.shape
+        assert np.allclose(da.x.values, mga_grid.x)
+        assert np.allclose(da.y.values, mga_grid.y)
+        assert np.array_equal(np.isnan(da.values), np.isnan(mga_grid.values))
+        assert da.attrs["epsg"] == 28354
 
 
 def test_xyz(mga_grid, tmp_path):
